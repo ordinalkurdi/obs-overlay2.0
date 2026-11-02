@@ -22,10 +22,30 @@ namespace ovl {
 
 namespace {
 
-// Audio sources that are really live in the program scene (visible items, nested scenes and groups included).
-void collect_live_audio(obs_source_t *, obs_source_t *child, void *param)
+// Audio sources that are really live in a scene: visible items only, walking into nested scenes and groups.
+struct LiveCtx {
+	std::set<std::string> *names;
+	int depth;
+};
+
+void collect_live_audio(obs_scene_t *scene, int depth, std::set<std::string> &names);
+
+bool live_item(obs_scene_t *, obs_sceneitem_t *item, void *param)
 {
-	if (obs_source_get_output_flags(child) & OBS_SOURCE_AUDIO) static_cast<std::set<std::string> *>(param)->insert(obs_source_get_name(child));
+	auto *c = static_cast<LiveCtx *>(param);
+	if (!obs_sceneitem_visible(item)) return true;
+	obs_source_t *src = obs_sceneitem_get_source(item);
+	if (!src) return true;
+	if (obs_source_get_output_flags(src) & OBS_SOURCE_AUDIO) c->names->insert(obs_source_get_name(src));
+	if (obs_scene_t *inner = obs_scene_from_source(src)) collect_live_audio(inner, c->depth + 1, *c->names); // nested scene or group
+	return true;
+}
+
+void collect_live_audio(obs_scene_t *scene, int depth, std::set<std::string> &names)
+{
+	if (depth > 8) return; // guards against scenes that contain each other
+	LiveCtx c{&names, depth};
+	obs_scene_enum_items(scene, live_item, &c);
 }
 
 struct ItemCollector {
@@ -132,7 +152,7 @@ public:
 		std::set<std::string> live_audio;
 		if (obs_source_t *cur = obs_frontend_get_current_scene()) {
 			d.scene = obs_source_get_name(cur);
-			obs_source_enum_active_tree_sources(cur, collect_live_audio, &live_audio);
+			if (obs_scene_t *sc0 = obs_scene_from_source(cur)) collect_live_audio(sc0, 0, live_audio);
 			if (obs_scene_t *sc = obs_scene_from_source(cur)) {
 				ItemCollector ic;
 				obs_scene_enum_items(sc, collect_item, &ic);

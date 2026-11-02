@@ -1,59 +1,66 @@
-# OBS Plugin Template
+# OBS Overlay (native OBS Studio plugin)
 
-## Introduction
+The Python/PySide6 "OBS Overlay" app, rebuilt as a C++17 / Qt 6 plugin on top of
+[obs-plugintemplate](https://github.com/obsproject/obs-plugintemplate). It runs **inside** OBS, so there is no
+WebSocket, no password, no separate process and no installer.
 
-The plugin template is meant to be used as a starting point for OBS Studio plugin development. It includes:
+## Install the sources into the template
 
-* Boilerplate plugin source code
-* A CMake project file
-* GitHub Actions workflows and repository actions
+1. Create your repo from the template (GitHub: *Use this template*), clone it.
+2. Copy this folder's `src/`, `tests/`, `data/`, `CMakeLists.txt`, `.clang-format` over the template's files
+   (delete the template's `src/plugin-main.c`). Keep the template's `cmake/`, `.github/`, `build-aux/`,
+   `CMakePresets.json`, `LICENSE` (GPL-2.0, which is what a libobs plugin must be).
+3. In `buildspec.json` change only the metadata: `name` = `obs-overlay`, `displayName` = `OBS Overlay`,
+   `version`, `author`, `website`, `email`. Leave `dependencies` and `platformConfig` as the template has them.
+4. Build exactly as the template describes, e.g. Windows:
+   `cmake --preset windows-x64` then `cmake --build --preset windows-x64`.
+   (`CMakeLists.txt` forces `ENABLE_FRONTEND_API` and `ENABLE_QT` on, and turns warnings-as-errors off for this target.)
 
-## Supported Build Environments
+Requires OBS 31+ (frontend screenshot events, Qt 6). Unit tests of the pure logic need no OBS:
+`g++ -std=c++17 -Isrc/core tests/test_core.cpp -o t && ./t` (or `-DBUILD_OVL_TESTS=ON`).
 
-| Platform  | Tool   |
-|-----------|--------|
-| Windows   | Visual Studio 17 2022 |
-| macOS     | XCode 16.0 |
-| Windows, macOS  | CMake 3.30.5 |
-| Ubuntu 24.04 | CMake 3.28.3 |
-| Ubuntu 24.04 | `ninja-build` |
-| Ubuntu 24.04 | `pkg-config`
-| Ubuntu 24.04 | `build-essential` |
+## What maps to what
 
-## Quick Start
+| Python app | Plugin |
+|---|---|
+| OBS WebSocket (host, port, password, keyring) | direct libobs + obs-frontend-api calls on the UI thread |
+| pynput hotkeys + conflict detection | OBS hotkeys (`obs_hotkey_register_frontend`): rebind in *OBS Settings > Hotkeys*, entries start with "OBS Overlay:". Same defaults (Alt+Z, Alt+F9, ...) |
+| `core/service.py` worker thread + Qt signals | `Service` (synchronous, no locking: events arrive on the UI thread) |
+| `core/layouts.py`, `widget_rows.py`, `audio.py`, `webdocks.py` | `src/core/*.hpp`, pure C++, **unit-tested** |
+| qtawesome icons | Lucide-style inline SVG icons (hand-drawn, rendered with QtSvg) |
+| psutil CPU/RAM | Win32 / `/proc` / Mach calls, plus OBS process CPU (new "OBS CPU" metric) |
+| Screenshots via WebSocket | `obs_frontend_take_screenshot()`, then moved/converted to your folder, format, quality and name pattern |
+| Preview (WebSocket still) | the program texture read back from the GPU (still image on a timer, as before) |
+| Audio meters | real `obs_volmeter` levels, same ballistics (attack/release/peak hold) |
+| Demo mode | kept (`DemoBackend`) |
+| Tray-only app | Tools menu entry + optional tray icon + OBS hotkeys |
 
-An absolute bare-bones [Quick Start Guide](https://github.com/obsproject/obs-plugintemplate/wiki/Quick-Start-Guide) is available in the wiki.
+All other features are ported: docked/floating panel with slide animation, monitor edge reveal, pin, resize/move,
+notifications in screen centre, record/pause/stream/replay/save/screenshot/virtual camera, scenes, source
+show/hide/lock, mixer (mute, volume, activity, mic/desktop roles), gallery (recursive scan, search/filter/sort,
+favorites, rename, delete to recycle bin, thumbnails), settings (all sections, import/export/reset), floating widgets
+(stats, recording, stream, scene, audio status; move, resize with scaling text, opacity, pin, click-through), layout edit
+mode with snap guides and chips, layout presets (save/load/rename/overwrite/delete, modified detection).
 
-## Documentation
+## Differences you should know about
 
-All documentation can be found in the [Plugin Template Wiki](https://github.com/obsproject/obs-plugintemplate/wiki).
+* **Web docks**: OBS plugins cannot embed Chromium (QtWebEngine is not shipped with OBS). A "web link" widget therefore
+  shows the address with *Open in browser*, *Copy URL* and *Add as OBS dock* (opens OBS's own **Custom Browser Docks**
+  dialog with the URL copied). Presets for Twitch chat / Stream Manager are kept. Web zoom/transparency fields are
+  stored in presets but have no effect.
+* **Video playback**: QtMultimedia is not available either, so videos open in your default player; images open in a viewer.
+  **Video thumbnails** use the Windows shell thumbnail provider (Windows only); on other systems videos show an icon.
+  Video durations are not shown.
+* **Dropped %** now means OBS's network-dropped frames of the stream output (what OBS's status bar shows).
+* The first Windows build still needs your eyes (see below): UI paths such as flags and click-through are the same Qt
+  calls as before, but OBS's own event loop is now the host.
 
-Suggested reading to get up and running:
+## Verification status (honest)
 
-* [Getting started](https://github.com/obsproject/obs-plugintemplate/wiki/Getting-Started)
-* [Build system requirements](https://github.com/obsproject/obs-plugintemplate/wiki/Build-System-Requirements)
-* [Build system options](https://github.com/obsproject/obs-plugintemplate/wiki/CMake-Build-System-Options)
-
-## GitHub Actions & CI
-
-Default GitHub Actions workflows are available for the following repository actions:
-
-* `push`: Run for commits or tags pushed to `master` or `main` branches.
-* `pr-pull`: Run when a Pull Request has been pushed or synchronized.
-* `dispatch`: Run when triggered by the workflow dispatch in GitHub's user interface.
-* `build-project`: Builds the actual project and is triggered by other workflows.
-* `check-format`: Checks CMake and plugin source code formatting and is triggered by other workflows.
-
-The workflows make use of GitHub repository actions (contained in `.github/actions`) and build scripts (contained in `.github/scripts`) which are not needed for local development, but might need to be adjusted if additional/different steps are required to build the plugin.
-
-### Retrieving build artifacts
-
-Successful builds on GitHub Actions will produce build artifacts that can be downloaded for testing. These artifacts are commonly simple archives and will not contain package installers or installation programs.
-
-### Building a Release
-
-To create a release, an appropriately named tag needs to be pushed to the `main`/`master` branch using semantic versioning (e.g., `12.3.4`, `23.4.5-beta2`). A draft release will be created on the associated repository with generated installer packages or installation programs attached as release artifacts.
-
-## Signing and Notarizing on macOS
-
-Basic concepts of codesigning and notarization on macOS are explained in the correspodning [Wiki article](https://github.com/obsproject/obs-plugintemplate/wiki/Codesigning-On-macOS) which has a specific section for the [GitHub Actions setup](https://github.com/obsproject/obs-plugintemplate/wiki/Codesigning-On-macOS#setting-up-code-signing-for-github-actions).
+* `src/core/{layouts,widget_rows,weburl,audio_math}.hpp` and the Linux branch of `sysmetrics.cpp` were compiled with
+  `g++ -Wall -Wextra` and the 58 checks in `tests/test_core.cpp` pass (ports of your layout/preset tests, plus rows,
+  web URL validation, audio roles/ballistics, snapping).
+* Everything that needs Qt or libobs (`live_backend.cpp`, `service`, `settings`, `gallery`, `hotkeys`, all of `src/ui`,
+  `app.cpp`, `plugin-main.cpp`, `CMakeLists.txt`) was written against the Qt 6 / libobs 31 APIs **but not compiled**:
+  the sandbox had neither SDK. Expect a handful of compile errors or missing includes on the first build; send me the
+  compiler output and I will fix them. Runtime behaviour in a real OBS is untested.

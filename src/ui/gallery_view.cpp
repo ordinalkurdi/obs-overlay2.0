@@ -10,6 +10,7 @@
 #include <QInputDialog>
 #include <QMenu>
 #include <QPixmap>
+#include <QScreen>
 #include <QToolButton>
 #include <QVBoxLayout>
 

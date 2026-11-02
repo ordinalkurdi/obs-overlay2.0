@@ -193,8 +193,8 @@ void Overlay::build()
 	ml_->setContentsMargins(46, 0, 16, 4);
 	hv->addWidget(mixer_box_);
 	hv->addWidget(separator());
-	stat_row_ = new Row("dashboard", "Widgets", "", true, "Add and customize floating widgets (stats, web links)");
-	hv->addWidget(stat_row_);
+	stat_row = new Row("dashboard", "Widgets", "", true, "Add and customize floating widgets (stats, web links)");
+	hv->addWidget(stat_row);
 	footer_ = new QLabel;
 	footer_->setObjectName("dim");
 	footer_->setContentsMargins(16, 6, 16, 0);
@@ -648,7 +648,7 @@ void Overlay::sync()
 	}
 	scene_row_->set_sub(ok ? "" : "Not running");
 	mixer(s.inputs);
-	stat_row_->set_sub(QString(cfg_.b("stats_visible") ? "On" : "Off") + " - floating stats and web links");
+	stat_row->set_sub(QString(cfg_.b("stats_visible") ? "On" : "Off") + " - floating stats and web links");
 	set_sources(s.items);
 	src_row_->set_sub(ok ? QString("%1 in '%2'").arg(s.items.size()).arg(qs(s.scene)) : "Not running");
 	src_row_->set_right_icon(srcbox_->isHidden() ? "chevron-right" : "chevron-down", FG_DIM);

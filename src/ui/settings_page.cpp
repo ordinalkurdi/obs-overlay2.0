@@ -1,6 +1,8 @@
 #include "settings_page.hpp"
 #include "common.hpp"
 #include <QCheckBox>
+#include <QHBoxLayout>
+#include <QScrollArea>
 #include <QComboBox>
 #include <QDesktopServices>
 #include <QDoubleSpinBox>

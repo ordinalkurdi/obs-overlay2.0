@@ -1,6 +1,7 @@
 #pragma once
 #include "../core/service.hpp"
 #include <QScrollArea>
+#include <QVBoxLayout>
 #include <functional>
 
 namespace ovl::ui {

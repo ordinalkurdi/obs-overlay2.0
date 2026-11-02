@@ -63,7 +63,6 @@ QJsonObject Settings::defaults()
 	o["mic_source"] = "";
 	o["desktop_source"] = "";
 	o["stats_visible"] = false; // master switch for all floating widgets
-	o["ui_preview_open"] = false;
 	o["ui_sources_open"] = false;
 	o["ui_audio_open"] = true;
 	o["active_preset"] = "";

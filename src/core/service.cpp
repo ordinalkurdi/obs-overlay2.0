@@ -134,9 +134,6 @@ void Service::on_event(const BackendEvent &e)
 		if (!e.text.isEmpty()) say("info", tr("Scene: %1").arg(e.text));
 		break;
 	case BackendEvent::ScreenshotTaken: finish_screenshot(e.text); break;
-	case BackendEvent::PreviewFrame:
-		emit preview_ready(e.image); // frames arrive ~30/s: no state refresh, no notification
-		return;
 	case BackendEvent::Reload: break; // profile / scene collection changed: just re-read everything
 	default: break;
 	}
@@ -275,12 +272,6 @@ void Service::finish_screenshot(const QString &obs_path)
 		say("warn", tr("Screenshot kept where OBS saved it: %1").arg(QFileInfo(obs_path).fileName()));
 		emit media_created(obs_path);
 	}
-}
-
-// ---- preview -------------------------------------------------------------------------------------------------------
-void Service::set_preview(bool on, int width)
-{
-	if (backend_ && ok()) backend_->set_preview(on, width);
 }
 
 // ---- audio list ----------------------------------------------------------------------------------------------------

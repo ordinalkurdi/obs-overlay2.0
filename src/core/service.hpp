@@ -64,7 +64,6 @@ public:
 	void set_volume_db(const QString &name, double db);
 	void set_item_enabled(qint64 id, bool on);
 	void set_item_locked(qint64 id, bool on);
-	void set_preview(bool on, int width); // real-time preview of the program output
 	// Audio sources the mixer should list: follows the current scene, minus ones the user hid.
 	std::vector<InputInfo> mixer_inputs() const;
 	void set_audio_hidden(const QString &name, bool hidden);
@@ -74,7 +73,6 @@ signals:
 	void state_changed();
 	void notify(const QString &level, const QString &text);
 	void media_created(const QString &path);
-	void preview_ready(const QImage &img);
 	void meters_changed();
 
 private:

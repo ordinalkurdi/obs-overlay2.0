@@ -27,12 +27,10 @@ struct BackendEvent {
 		SceneChanged,    // text = scene name
 		Exit,            // OBS is closing
 		Reload,          // profile / scene collection changed: everything is different now
-		PreviewFrame,    // image = a new frame of the program output (real-time preview)
 	};
 	Type type = Changed;
 	QString text;
 	bool flag = false;
-	QImage image;
 };
 
 class Backend {
@@ -57,9 +55,6 @@ public:
 	virtual void set_volume_db(const std::string &name, double db) = 0;
 	virtual void set_replay_seconds(int sec) = 0; // applies when the replay buffer starts
 	virtual void request_screenshot() = 0;        // result arrives as BackendEvent::ScreenshotTaken
-	// Real-time preview: while on, every rendered frame (up to ~30/s) of the program output arrives as PreviewFrame.
-	virtual void set_preview(bool on, int width) = 0;
-
 	// Latest peak level per audio source in dB (real data from OBS volume meters).
 	virtual std::map<std::string, double> meters() = 0;
 	virtual void set_meters_enabled(bool on) = 0;

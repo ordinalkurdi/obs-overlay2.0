@@ -24,7 +24,6 @@ public:
 	QString s(const char *k) const { return d_.value(QLatin1String(k)).toString(); }
 	QStringList list(const char *k) const;
 	void set_list(const char *k, const QStringList &l);
-	int preview_delay() const; // validated 100-5000 ms
 
 	// ---- structured data ----
 	std::vector<layouts::WidgetCfg> &widgets() { return widgets_; }

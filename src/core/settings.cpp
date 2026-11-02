@@ -22,7 +22,6 @@ QJsonObject Settings::defaults()
 	QString videos = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
 	QString pictures = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
 	QJsonObject o;
-	o["mode"] = "obs"; // "obs" (live) | "demo" (simulation)
 	o["opacity"] = 0.96;
 	o["width"] = 420;
 	o["always_on_top"] = true;
@@ -54,14 +53,15 @@ QJsonObject Settings::defaults()
 	o["confirm_stop_record"] = false;
 	o["confirm_stop_stream"] = true;
 	o["notifications"] = true;
+	o["notification_position"] = "center"; // top-left | top-center | top-right | center | bottom-left | bottom-center | bottom-right
 	o["notification_seconds"] = 3;
 	o["hide_filenames"] = false;
 	o["favorites"] = QJsonArray();
-	o["preview_delay_ms"] = 1000;
 	o["audio_detect"] = true;
+	o["audio_hide_inactive"] = true; // mixer lists only sources live in the current scene
+	o["audio_hidden"] = QJsonArray(); // sources the user hid by hand
 	o["mic_source"] = "";
 	o["desktop_source"] = "";
-	o["preview_width"] = 320;
 	o["stats_visible"] = false; // master switch for all floating widgets
 	o["ui_preview_open"] = false;
 	o["ui_sources_open"] = false;
@@ -90,8 +90,6 @@ QStringList Settings::list(const char *k) const
 }
 
 void Settings::set_list(const char *k, const QStringList &l) { d_[QLatin1String(k)] = to_array(l); }
-
-int Settings::preview_delay() const { return qBound(100, i("preview_delay_ms"), 5000); }
 
 // ---- widgets <-> JSON -------------------------------------------------------------------------------------
 QJsonObject widget_to_json(const WidgetCfg &w)

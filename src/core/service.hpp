@@ -1,6 +1,6 @@
-// Service: single source of truth for the UI. Owns the backend (live OBS or demo), keeps the latest snapshot, turns
+// Service: single source of truth for the UI. Owns the backend, keeps the latest snapshot, turns
 // backend events into notifications and runs the few commands that have rules of their own (replay length,
-// screenshots with custom folder / format, microphone / desktop roles).
+// screenshots with custom folder / format, microphone / desktop roles, hidden audio sources).
 //
 // Everything runs on the Qt UI thread = OBS main thread, so there is no worker thread and no locking here.
 #pragma once
@@ -19,7 +19,7 @@ namespace ovl {
 class Service : public QObject {
 	Q_OBJECT
 public:
-	enum class Status { Connected, Demo, Disconnected };
+	enum class Status { Connected, Disconnected };
 
 	struct Note {
 		QString time, level, text;
@@ -32,19 +32,17 @@ public:
 	Snapshot snap;
 	SysMetrics sys;
 	std::map<std::string, double> meters;
-	double preview_ms = 0;
 	std::vector<Note> notifications;
 
 	Status status() const { return status_; }
 	bool ok() const { return status_ != Status::Disconnected; }
-	bool demo() const { return status_ == Status::Demo; }
 	QString status_text() const;
 	QString diagnostics() const;
 
 	// lifecycle
-	void start(); // picks live OBS or demo from the settings
-	void restart() { start(); }
+	void start();
 	void shutdown();
+	void apply_settings(); // re-apply settings that live inside the backend (audio meters)
 
 	// who needs fresh data (polling only runs while somebody looks)
 	void set_overlay_visible(bool on);
@@ -63,12 +61,14 @@ public:
 	void screenshot();
 	void set_scene(const QString &name);
 	void set_mute(const QString &name, bool muted);
-	void toggle_mute_role(const QString &role); // "mic" | "desktop"
-	void set_role(const QString &role, const QString &name);
 	void set_volume_db(const QString &name, double db);
 	void set_item_enabled(qint64 id, bool on);
 	void set_item_locked(qint64 id, bool on);
-	void request_preview();
+	void set_preview(bool on, int width); // real-time preview of the program output
+	// Audio sources the mixer should list: follows the current scene, minus ones the user hid.
+	std::vector<InputInfo> mixer_inputs() const;
+	void set_audio_hidden(const QString &name, bool hidden);
+	int hidden_audio_count() const;
 
 signals:
 	void state_changed();

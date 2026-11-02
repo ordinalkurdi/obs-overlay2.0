@@ -9,7 +9,10 @@
 #include <util/config-file.h>
 #include <util/platform.h>
 
+#include <QMetaObject>
+#include <QObject>
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <mutex>
 #include <set>
@@ -19,13 +22,10 @@ namespace ovl {
 
 namespace {
 
-const char *AUDIO_KIND_HINTS[] = {"wasapi", "pulse", "alsa", "coreaudio", "audio"};
-
-bool kind_is_audio(const std::string &kind)
+// Audio sources that are really live in the program scene (visible items, nested scenes and groups included).
+void collect_live_audio(obs_source_t *, obs_source_t *child, void *param)
 {
-	for (auto h : AUDIO_KIND_HINTS)
-		if (kind.find(h) != std::string::npos) return true;
-	return false;
+	if (obs_source_get_output_flags(child) & OBS_SOURCE_AUDIO) static_cast<std::set<std::string> *>(param)->insert(obs_source_get_name(child));
 }
 
 struct ItemCollector {
@@ -60,8 +60,6 @@ bool collect_input(void *param, obs_source_t *src)
 	i.kind = id ? id : "";
 	i.muted = obs_source_muted(src);
 	i.db = audio::mul_to_db(obs_source_get_volume(src));
-	i.active = obs_source_active(src);
-	i.audio_flag = kind_is_audio(i.kind);
 	c->inputs.push_back(std::move(i));
 	return true;
 }
@@ -72,6 +70,7 @@ class LiveBackend final : public Backend {
 public:
 	LiveBackend()
 	{
+		poster_ = new QObject; // context for queued preview frames; deleting it drops frames still in flight
 		cpu_ = os_cpu_usage_info_start();
 		obs_frontend_add_event_callback(&LiveBackend::on_frontend_event, this);
 	}
@@ -79,11 +78,11 @@ public:
 	~LiveBackend() override
 	{
 		obs_frontend_remove_event_callback(&LiveBackend::on_frontend_event, this);
+		set_preview(false, 0);
+		delete poster_;
 		clear_meters();
 		if (cpu_) os_cpu_usage_info_destroy(cpu_);
 	}
-
-	bool is_demo() const override { return false; }
 
 	// ---- state ----------------------------------------------------------------------------------------
 	Snapshot snapshot() override
@@ -130,8 +129,10 @@ public:
 		obs_frontend_get_scenes(&scenes);
 		for (size_t k = 0; k < scenes.sources.num; ++k) d.scenes.push_back(obs_source_get_name(scenes.sources.array[k]));
 		obs_frontend_source_list_free(&scenes);
+		std::set<std::string> live_audio;
 		if (obs_source_t *cur = obs_frontend_get_current_scene()) {
 			d.scene = obs_source_get_name(cur);
+			obs_source_enum_active_tree_sources(cur, collect_live_audio, &live_audio);
 			if (obs_scene_t *sc = obs_scene_from_source(cur)) {
 				ItemCollector ic;
 				obs_scene_enum_items(sc, collect_item, &ic);
@@ -152,6 +153,8 @@ public:
 		InputCollector ic;
 		obs_enum_sources(collect_input, &ic);
 		d.inputs = std::move(ic.inputs);
+		const std::set<std::string> globals = global_audio_names();
+		for (auto &i : d.inputs) i.active = globals.count(i.name) || live_audio.count(i.name); // follows the scene
 		sync_meters(d.inputs);
 		detect_roles(d);
 		return d;
@@ -213,42 +216,21 @@ public:
 
 	void request_screenshot() override { obs_frontend_take_screenshot(); }
 
-	// Renders the program output into a small texture and reads it back. Not live video: a still, refreshed on a timer.
-	QImage preview(int width) override
+	// Real-time preview: a render callback copies every rendered frame (max ~30/s) of the program output into a small
+	// texture, reads it back one frame later (no GPU stall) and posts it to the UI thread.
+	void set_preview(bool on, int width) override
 	{
-		obs_video_info ovi = {};
-		if (!obs_get_video_info(&ovi) || !ovi.base_width || !ovi.base_height || width < 16) return {};
-		const uint32_t bw = ovi.base_width, bh = ovi.base_height;
-		const uint32_t w = (uint32_t)width, h = (uint32_t)((uint64_t)width * bh / bw);
-		QImage img;
-		obs_enter_graphics();
-		gs_texrender_t *tr = gs_texrender_create(GS_BGRA, GS_ZS_NONE);
-		gs_stagesurf_t *ss = gs_stagesurface_create(w, h, GS_BGRA);
-		if (tr && ss) {
-			gs_texrender_reset(tr);
-			if (gs_texrender_begin(tr, w, h)) {
-				vec4 clear;
-				vec4_zero(&clear);
-				gs_clear(GS_CLEAR_COLOR, &clear, 0.0f, 0);
-				gs_ortho(0.0f, (float)bw, 0.0f, (float)bh, -100.0f, 100.0f);
-				gs_blend_state_push();
-				gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
-				obs_render_main_texture();
-				gs_blend_state_pop();
-				gs_texrender_end(tr);
-				gs_stage_texture(ss, gs_texrender_get_texture(tr));
-				uint8_t *data = nullptr;
-				uint32_t linesize = 0;
-				if (gs_stagesurface_map(ss, &data, &linesize)) {
-					img = QImage(data, (int)w, (int)h, (qsizetype)linesize, QImage::Format_RGB32).copy();
-					gs_stagesurface_unmap(ss);
-				}
-			}
+		pv_width_ = std::max(160, std::min(width, 960));
+		if (on == pv_on_) return;
+		pv_on_ = on;
+		if (on) {
+			obs_add_main_rendered_callback(&LiveBackend::on_rendered, this);
+		} else {
+			obs_remove_main_rendered_callback(&LiveBackend::on_rendered, this); // waits for a running callback
+			obs_enter_graphics();
+			free_preview_gfx();
+			obs_leave_graphics();
 		}
-		if (ss) gs_stagesurface_destroy(ss);
-		if (tr) gs_texrender_destroy(tr);
-		obs_leave_graphics();
-		return img;
 	}
 
 	// ---- meters (real levels from libobs volume meters) ----------------------------------------------------
@@ -277,6 +259,94 @@ private:
 		std::string name;
 		obs_volmeter_t *vm = nullptr;
 	};
+
+	static void on_rendered(void *p) { static_cast<LiveBackend *>(p)->render_preview_frame(); }
+
+	void free_preview_gfx()
+	{
+		if (ss_[0]) gs_stagesurface_destroy(ss_[0]);
+		if (ss_[1]) gs_stagesurface_destroy(ss_[1]);
+		if (tr_) gs_texrender_destroy(tr_);
+		ss_[0] = ss_[1] = nullptr;
+		tr_ = nullptr;
+		have_prev_ = false;
+	}
+
+	void render_preview_frame() // graphics thread
+	{
+		const uint64_t now = os_gettime_ns();
+		if (now - last_pv_ < 33000000ULL) return;
+		last_pv_ = now;
+		obs_video_info ovi = {};
+		if (!obs_get_video_info(&ovi) || !ovi.base_width || !ovi.base_height) return;
+		const uint32_t bw = ovi.base_width, bh = ovi.base_height, w = (uint32_t)pv_width_.load(), h = (uint32_t)((uint64_t)w * bh / bw);
+		if (!tr_ || w != tw_ || h != th_) {
+			free_preview_gfx();
+			tr_ = gs_texrender_create(GS_BGRA, GS_ZS_NONE);
+			ss_[0] = gs_stagesurface_create(w, h, GS_BGRA);
+			ss_[1] = gs_stagesurface_create(w, h, GS_BGRA);
+			tw_ = w; th_ = h; cur_ = 0;
+			if (!tr_ || !ss_[0] || !ss_[1]) { free_preview_gfx(); return; }
+		}
+		gs_texrender_reset(tr_);
+		if (!gs_texrender_begin(tr_, w, h)) return;
+		vec4 clear;
+		vec4_zero(&clear);
+		gs_clear(GS_CLEAR_COLOR, &clear, 0.0f, 0);
+		gs_ortho(0.0f, (float)bw, 0.0f, (float)bh, -100.0f, 100.0f);
+		gs_blend_state_push();
+		gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
+		obs_render_main_texture();
+		gs_blend_state_pop();
+		gs_texrender_end(tr_);
+		gs_stage_texture(ss_[cur_], gs_texrender_get_texture(tr_));
+		if (have_prev_) { // the other surface holds the previous frame: reading it does not wait for the GPU
+			uint8_t *data = nullptr;
+			uint32_t linesize = 0;
+			if (gs_stagesurface_map(ss_[1 - cur_], &data, &linesize)) {
+				post_frame(QImage(data, (int)w, (int)h, (qsizetype)linesize, QImage::Format_RGB32).copy());
+				gs_stagesurface_unmap(ss_[1 - cur_]);
+			}
+		}
+		have_prev_ = true;
+		cur_ = 1 - cur_;
+	}
+
+	void post_frame(const QImage &img)
+	{
+		{
+			std::lock_guard<std::mutex> g(pv_mtx_);
+			latest_ = img; // only the newest frame is kept: a slow UI never builds up a queue
+		}
+		if (posted_.exchange(true)) return;
+		QMetaObject::invokeMethod(poster_, [this] {
+			QImage i;
+			{
+				std::lock_guard<std::mutex> g(pv_mtx_);
+				i = std::move(latest_);
+			}
+			posted_ = false;
+			if (on_event && !i.isNull()) {
+				BackendEvent e;
+				e.type = BackendEvent::PreviewFrame;
+				e.image = i;
+				on_event(e);
+			}
+		}, Qt::QueuedConnection);
+	}
+
+	// Names of OBS's global audio devices (desktop audio 1-2, mic/aux 1-3): always live, whatever the scene.
+	static std::set<std::string> global_audio_names()
+	{
+		std::set<std::string> out;
+		for (uint32_t ch = 1; ch <= 5; ++ch) {
+			if (obs_source_t *s = obs_get_output_source(ch)) {
+				out.insert(obs_source_get_name(s));
+				obs_source_release(s);
+			}
+		}
+		return out;
+	}
 
 	static void on_frontend_event(enum obs_frontend_event e, void *p) { static_cast<LiveBackend *>(p)->handle(e); }
 
@@ -456,6 +526,19 @@ private:
 	std::mutex mtx_;
 	std::map<std::string, double> peaks_;
 	uint64_t meter_events_ = 0;
+
+	// real-time preview
+	QObject *poster_ = nullptr;
+	std::atomic<bool> pv_on_{false}, posted_{false};
+	std::atomic<int> pv_width_{320};
+	std::mutex pv_mtx_;
+	QImage latest_;
+	gs_texrender_t *tr_ = nullptr;
+	gs_stagesurf_t *ss_[2] = {nullptr, nullptr};
+	uint32_t tw_ = 0, th_ = 0;
+	int cur_ = 0;
+	bool have_prev_ = false;
+	uint64_t last_pv_ = 0;
 };
 
 std::unique_ptr<Backend> make_live_backend() { return std::make_unique<LiveBackend>(); }

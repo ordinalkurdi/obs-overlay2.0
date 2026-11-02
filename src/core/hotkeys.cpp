@@ -30,15 +30,10 @@ Hotkeys::~Hotkeys() { unregister_all(); }
 void Hotkeys::register_all()
 {
 	if (!entries_.empty()) return;
-	// action id, label shown in OBS, default key (Alt+Z etc. as in the standalone app)
+	// Only actions OBS has no hotkey for. Record, replay buffer, screenshot and per-source mute already exist in
+	// OBS Settings > Hotkeys, so they are not duplicated here.
 	static const struct { const char *a, *l, *k; bool alt, shift, ctrl; } defs[] = {
 		{"toggle_overlay", "OBS Overlay: Show / hide overlay", "OBS_KEY_Z", true, false, false},
-		{"record", "OBS Overlay: Start / stop recording", "OBS_KEY_F9", true, false, false},
-		{"replay_toggle", "OBS Overlay: Toggle Instant Replay", "OBS_KEY_F10", true, true, false},
-		{"replay_save", "OBS Overlay: Save replay", "OBS_KEY_F10", true, false, false},
-		{"screenshot", "OBS Overlay: Screenshot (OBS scene)", "OBS_KEY_F1", true, false, false},
-		{"mic_mute", "OBS Overlay: Toggle microphone mute", "OBS_KEY_M", true, false, true},
-		{"desktop_mute", "OBS Overlay: Toggle desktop audio mute", "OBS_KEY_D", true, false, true},
 		{"stats", "OBS Overlay: Show / hide floating widgets", "OBS_KEY_R", true, false, false},
 		{"widgets_click", "OBS Overlay: Toggle click-through for all widgets", "OBS_KEY_W", true, true, false},
 		{"layout_edit", "OBS Overlay: Edit widget layout", "OBS_KEY_L", true, true, false},

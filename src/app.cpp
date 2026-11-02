@@ -98,8 +98,7 @@ void App::apply_changes(bool restart)
 {
 	ui::restyle_all();
 	overlay_->apply_settings();
-	overlay_->apply_preview();
-	if (restart) svc_->restart();
+	if (restart) svc_->apply_settings();
 	widgets_->apply(false);
 	store_->rescan();
 	overlay_->sync();
@@ -117,12 +116,6 @@ void App::toggle_widgets()
 void App::on_action(const QString &a)
 {
 	if (a == "toggle_overlay") overlay_->toggle_visible();
-	else if (a == "record") overlay_->rec_clicked();
-	else if (a == "replay_toggle") svc_->toggle_replay();
-	else if (a == "replay_save") svc_->save_replay();
-	else if (a == "screenshot") svc_->screenshot();
-	else if (a == "mic_mute") svc_->toggle_mute_role("mic");
-	else if (a == "desktop_mute") svc_->toggle_mute_role("desktop");
 	else if (a == "stats") toggle_widgets();
 	else if (a == "widgets_click") widgets_->toggle_click_through_all();
 	else if (a == "layout_edit") editor_->toggle();

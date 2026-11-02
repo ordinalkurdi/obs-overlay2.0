@@ -51,7 +51,6 @@ public:
 	void hide_panel();
 	void toggle_visible() { is_open() ? hide_panel() : show_panel(); }
 	void apply_settings();
-	void apply_preview();
 	void sync();
 	void rec_clicked();
 	void live_clicked();
@@ -106,12 +105,10 @@ private:
 	void toggle_mixer();
 	void set_sources(const std::vector<ItemInfo> &items);
 	void set_preview(const QImage &img);
-	QString preview_sub() const;
+	int preview_width() const;
 	QString rec_sub() const;
 	QString stream_sub() const;
 	void mixer(const std::vector<InputInfo> &inputs);
-	std::vector<InputInfo> shown_inputs(const std::vector<InputInfo> &inputs) const;
-	void source_menu(const QString &name, const QPoint &pos);
 	void update_meters();
 	void meter_tick();
 
@@ -131,7 +128,7 @@ private:
 	EdgeTrigger *edge_;
 	std::map<QString, Grip *> grips_;
 	QPropertyAnimation *anim_;
-	QTimer idle_, pv_, leave_timer_, persist_, meter_timer_;
+	QTimer idle_, leave_timer_, persist_, meter_timer_;
 	QElapsedTimer clock_;
 	double meter_t_ = 0;
 	bool top_key_known_ = false, top_key_ = false;
@@ -139,8 +136,6 @@ private:
 	bool dragging_ = false;
 	std::map<QString, MixRow> rows_;
 	QString mix_sig_, src_sig_;
-	std::vector<std::string> meter_names_;
-	bool meter_names_known_ = false;
 };
 
 } // namespace ovl::ui

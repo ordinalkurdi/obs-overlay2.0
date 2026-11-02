@@ -35,8 +35,9 @@ protected:
 private:
 	void place_flyout();
 	void fill_menu();
+	void add_custom_url();
 	LayoutEditor &ed_;
-	QPushButton *widgets_btn_, *hide_btn_, *reset_btn_, *preset_btn_, *save_btn_;
+	QPushButton *widgets_btn_, *url_btn_, *hide_btn_, *reset_btn_, *preset_btn_, *save_btn_;
 	QMenu *menu_;
 };
 

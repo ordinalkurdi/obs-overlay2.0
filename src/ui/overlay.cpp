@@ -51,14 +51,13 @@ Overlay::Overlay(Service &svc, MediaStore &store) : QWidget(nullptr), svc_(svc),
 	build();
 	connect(&svc_, &Service::state_changed, this, &Overlay::sync);
 	connect(&svc_, &Service::notify, this, [this](const QString &lv, const QString &t) {
-		if (cfg_.b("notifications")) toast_->show_msg(lv, t, cfg_.d("notification_seconds"));
+		if (cfg_.b("notifications")) toast_->show_msg(lv, t, cfg_.d("notification_seconds"), cfg_.s("notification_position"));
 	});
 	connect(&svc_, &Service::preview_ready, this, &Overlay::set_preview);
 	connect(&svc_, &Service::meters_changed, this, &Overlay::update_meters);
 
 	idle_.setSingleShot(true);
 	connect(&idle_, &QTimer::timeout, this, &Overlay::auto_hide);
-	connect(&pv_, &QTimer::timeout, &svc_, &Service::request_preview);
 	anim_ = new QPropertyAnimation(this, "pos", this);
 	connect(anim_, &QPropertyAnimation::valueChanged, this, [this] { clip(); });
 	connect(anim_, &QPropertyAnimation::finished, this, [this] { if (open_) clearMask(); else { hide(); clearMask(); } });
@@ -86,7 +85,6 @@ Overlay::Overlay(Service &svc, MediaStore &store) : QWidget(nullptr), svc_(svc),
 	apply_settings();
 	restore_sections();
 	sync();
-	prev_row_->set_sub(preview_sub());
 }
 
 Overlay::~Overlay()
@@ -360,6 +358,7 @@ void Overlay::resizeEvent(QResizeEvent *e)
 {
 	QWidget::resizeEvent(e);
 	place_grips();
+	if (preview_on_ && isVisible()) svc_.set_preview(true, preview_width()); // keep the preview sharp after a resize
 	if (user_resize) persist_.start(); // only user drags are saved, not programmatic resizes
 }
 
@@ -404,7 +403,8 @@ void Overlay::show_page(const QString &name)
 
 void Overlay::hideEvent(QHideEvent *e)
 {
-	meter_timer_.stop(); pv_.stop();
+	meter_timer_.stop();
+	svc_.set_preview(false, 0); // no rendering while the panel is hidden
 	open_ = false;
 	edge_->refresh(false);
 	if (!docked()) { cfg_.set("pos", QJsonArray{x(), y()}); cfg_.save(); }
@@ -419,7 +419,7 @@ void Overlay::showEvent(QShowEvent *e)
 	store_.rescan();
 	svc_.set_overlay_visible(true);
 	update_meters();
-	if (preview_on_) { svc_.request_preview(); pv_.start(cfg_.preview_delay()); }
+	if (preview_on_) svc_.set_preview(true, preview_width());
 	emit visibility_changed(true);
 }
 
@@ -510,6 +510,7 @@ void Overlay::restore_sections()
 {
 	preview_on_ = cfg_.b("ui_preview_open");
 	prev_lab_->setVisible(preview_on_);
+	prev_row_->set_sub("Real-time view of the OBS output");
 	prev_row_->set_right_icon(preview_on_ ? "chevron-down" : "chevron-right", FG_DIM);
 	srcbox_->setVisible(cfg_.b("ui_sources_open"));
 	src_row_->set_right_icon(cfg_.b("ui_sources_open") ? "chevron-down" : "chevron-right", FG_DIM);
@@ -528,8 +529,7 @@ void Overlay::toggle_preview()
 	prev_lab_->setVisible(preview_on_);
 	remember("ui_preview_open", preview_on_);
 	prev_row_->set_right_icon(preview_on_ ? "chevron-down" : "chevron-right", FG_DIM);
-	if (preview_on_) { svc_.request_preview(); pv_.start(cfg_.preview_delay()); }
-	else pv_.stop();
+	svc_.set_preview(preview_on_ && isVisible(), preview_width());
 }
 
 void Overlay::toggle_sources()
@@ -581,24 +581,14 @@ void Overlay::set_sources(const std::vector<ItemInfo> &items)
 	}
 }
 
-QString Overlay::preview_sub() const
-{
-	QString s = QString("Snapshot every %1 ms").arg(cfg_.preview_delay());
-	if (svc_.preview_ms > 0) s += QString(" - last frame %1 ms").arg(svc_.preview_ms, 0, 'f', 0);
-	return s + " (not live video)";
-}
-
-void Overlay::apply_preview()
-{
-	if (preview_on_ && isVisible()) { pv_.start(cfg_.preview_delay()); svc_.request_preview(); } // only the timer changes: nothing restarts
-	prev_row_->set_sub(preview_sub());
-}
+int Overlay::preview_width() const { return qMax(160, qMin(int((width() - 32) * devicePixelRatioF()), 960)); }
 
 void Overlay::set_preview(const QImage &img)
 {
-	if (img.isNull()) return;
-	prev_lab_->setPixmap(QPixmap::fromImage(img).scaledToWidth(qMax(100, width() - 32), Qt::SmoothTransformation));
-	prev_row_->set_sub(preview_sub());
+	if (img.isNull() || !preview_on_) return;
+	QPixmap pm = QPixmap::fromImage(img);
+	pm.setDevicePixelRatio(devicePixelRatioF());
+	prev_lab_->setPixmap(pm);
 }
 
 QString Overlay::rec_sub() const
@@ -622,7 +612,7 @@ void Overlay::sync()
 {
 	const Snapshot &s = svc_.snap;
 	const bool ok = svc_.ok();
-	dot_->setStyleSheet(QString("background:%1; border-radius:5px;").arg(svc_.demo() ? "#4aa3ff" : ok ? "#3ecf8e" : "#e5534b"));
+	dot_->setStyleSheet(QString("background:%1; border-radius:5px;").arg(ok ? "#3ecf8e" : "#e5534b"));
 	dot_->setToolTip(svc_.status_text());
 	for (Row *r : {rec_, rep_, save_, shot_, live_, scene_row_, mix_row_, prev_row_, src_row_}) r->setEnabled(ok);
 	const bool rec = s.recording;
@@ -661,31 +651,13 @@ void Overlay::sync()
 	footer_->setText((svc_.status_text() + "  |  " + qs(s.version)).trimmed());
 }
 
-void Overlay::source_menu(const QString &name, const QPoint &pos)
-{
-	QMenu m(this);
-	apply_style(&m);
-	m.addAction("Use as microphone", this, [this, name] { svc_.set_role("mic", name); });
-	m.addAction("Use as desktop audio", this, [this, name] { svc_.set_role("desktop", name); });
-	m.addAction("Auto-detect microphone / desktop", this, [this] { svc_.set_role("mic", ""); svc_.set_role("desktop", ""); });
-	m.exec(pos);
-}
-
-// Sources that really carry audio: capture devices always; other source types (browser, media, game...) only once OBS
-// reports level meters for them. Before any meter data has arrived they are shown so nothing seems missing.
-std::vector<InputInfo> Overlay::shown_inputs(const std::vector<InputInfo> &inputs) const
-{
-	if (!cfg_.b("audio_detect") || svc_.meters.empty()) return inputs;
-	std::vector<InputInfo> out;
-	for (auto &i : inputs) if (i.audio_flag || svc_.meters.count(i.name)) out.push_back(i);
-	return out;
-}
-
 void Overlay::mixer(const std::vector<InputInfo> &all)
 {
-	const auto inputs = shown_inputs(all);
+	const auto inputs = svc_.mixer_inputs(); // follows the scene, minus hidden sources
+	(void)all;
 	QString sig;
 	for (auto &i : inputs) sig += qs(i.name) + "\n";
+	sig += QString("#%1").arg(svc_.hidden_audio_count());
 	if (sig != mix_sig_) {
 		while (QLayoutItem *it = ml_->takeAt(0)) { if (QWidget *w = it->widget()) w->deleteLater(); delete it; }
 		rows_.clear();
@@ -708,10 +680,9 @@ void Overlay::mixer(const std::vector<InputInfo> &all)
 			dot->setStyleSheet("background:#444; border-radius:4px;");
 			auto *name = new QLabel(n);
 			name->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-			name->setToolTip("Right-click to use this source as microphone or desktop audio");
-			name->setContextMenuPolicy(Qt::CustomContextMenu);
-			connect(name, &QLabel::customContextMenuRequested, this, [this, n, name](const QPoint &p) { source_menu(n, name->mapToGlobal(p)); });
-			head->addWidget(mute); head->addWidget(name, 1); head->addWidget(dot);
+			auto *hide = tool_button("eye-off", "Hide this source from the mixer", false, 14);
+			connect(hide, &QToolButton::clicked, this, [this, n] { svc_.set_audio_hidden(n, true); });
+			head->addWidget(mute); head->addWidget(name, 1); head->addWidget(dot); head->addWidget(hide);
 			auto *bar = new LevelBar;
 			auto *sl = new QSlider(Qt::Horizontal);
 			sl->setRange(-60, 0);
@@ -725,6 +696,22 @@ void Overlay::mixer(const std::vector<InputInfo> &all)
 			bv->addLayout(head); bv->addWidget(bar); bv->addWidget(sl);
 			ml_->addWidget(box);
 			rows_[n] = MixRow{mute, dot, name, bar, sl, 0, false, -1};
+		}
+		if (svc_.hidden_audio_count() > 0) { // restore hidden sources
+			auto *restore = new QPushButton(QString("Show %1 hidden source(s)...").arg(svc_.hidden_audio_count()));
+			restore->setObjectName("link");
+			connect(restore, &QPushButton::clicked, this, [this, restore] {
+				QMenu m(this);
+				apply_style(&m);
+				for (auto &i : svc_.snap.inputs) {
+					const QString n = qs(i.name);
+					if (svc_.cfg.list("audio_hidden").contains(n)) m.addAction(icon("eye"), n, this, [this, n] { svc_.set_audio_hidden(n, false); });
+				}
+				m.addSeparator();
+				m.addAction("Show all", this, [this] { svc_.cfg.set_list("audio_hidden", {}); svc_.cfg.save(); svc_.refresh(); });
+				m.exec(restore->mapToGlobal(QPoint(0, restore->height())));
+			});
+			ml_->addWidget(restore);
 		}
 		mix_sig_ = sig;
 	}
@@ -755,17 +742,9 @@ void Overlay::mixer(const std::vector<InputInfo> &all)
 void Overlay::update_meters()
 {
 	if (rows_.empty() || !isVisible()) return;
-	const bool on = cfg_.b("audio_detect") && !svc_.demo();
+	const bool on = cfg_.b("audio_detect");
 	const auto &levels = svc_.meters;
 	const double now = clock_.elapsed() / 1000.0;
-	std::vector<std::string> known;
-	for (auto &kv : levels) known.push_back(kv.first);
-	if (!meter_names_known_ || known != meter_names_) { // OBS told us which sources really have audio: refresh the list
-		const bool first = !meter_names_known_;
-		meter_names_ = known;
-		meter_names_known_ = true;
-		if (!svc_.snap.inputs.empty() && (!first || !known.empty())) mixer(svc_.snap.inputs);
-	}
 	for (auto &[n, r] : rows_) {
 		r.bar->setVisible(on);
 		r.dot->setVisible(on);

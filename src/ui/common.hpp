@@ -98,7 +98,9 @@ class NotificationWindow : public QWidget {
 	Q_OBJECT
 public:
 	NotificationWindow();
-	void show_msg(const QString &level, const QString &text, double seconds);
+	// position: top-left | top-center | top-right | center | bottom-left | bottom-center | bottom-right
+	void show_msg(const QString &level, const QString &text, double seconds, const QString &position = "center");
+	void place(const QString &position);
 private:
 	QLabel *lab_;
 	QTimer timer_;

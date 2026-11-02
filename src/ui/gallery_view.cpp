@@ -151,9 +151,7 @@ std::vector<const Media *> GalleryWindow::filtered() const
 
 void GalleryWindow::rebuild()
 {
-	const int ts = store_.items().empty() ? 150 : 0;
-	(void)ts;
-	const int size = qMax(100, 150);
+	const int size = 150;
 	list_->clear();
 	list_->setIconSize(QSize(size, size * 9 / 16 + 20));
 	int idx = 0;

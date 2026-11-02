@@ -1,7 +1,9 @@
 #include "layout_edit.hpp"
+#include "../core/weburl.hpp"
 #include "../core/widget_rows.hpp"
 #include "common.hpp"
 #include <QGuiApplication>
+#include <QInputDialog>
 #include <QScreen>
 #include <QShortcut>
 
@@ -90,6 +92,9 @@ LayoutToolbar::LayoutToolbar(LayoutEditor &ed) : QWidget(nullptr, TOP), ed_(ed)
 	apply_style(menu_);
 	connect(menu_, &QMenu::aboutToShow, this, [this] { fill_menu(); });
 	widgets_btn_->setMenu(menu_);
+	url_btn_ = new QPushButton(icon("globe"), " Add Custom URL");
+	url_btn_->setToolTip("Add a floating web link widget for any address (chat, dashboard, ...)");
+	connect(url_btn_, &QPushButton::clicked, this, &LayoutToolbar::add_custom_url);
 	hide_btn_ = new QPushButton(icon("eye-off"), " Hide All");
 	hide_btn_->setToolTip("Hide every widget (or show them all again)");
 	connect(hide_btn_, &QPushButton::clicked, this, [this] { auto &m = ed_.mgr; m.all_hidden() ? m.show_all() : m.hide_all(); });
@@ -110,7 +115,7 @@ LayoutToolbar::LayoutToolbar(LayoutEditor &ed) : QWidget(nullptr, TOP), ed_(ed)
 	connect(save_btn_, &QPushButton::clicked, &ed_.ctl, &PresetController::save_new);
 	auto *done = tool_button("close", "Done editing (Esc)", false, 18);
 	connect(done, &QToolButton::clicked, &ed_, &LayoutEditor::stop);
-	for (QWidget *b : std::initializer_list<QWidget *>{widgets_btn_, hide_btn_, reset_btn_, preset_btn_, save_btn_, done}) h->addWidget(b);
+	for (QWidget *b : std::initializer_list<QWidget *>{widgets_btn_, url_btn_, hide_btn_, reset_btn_, preset_btn_, save_btn_, done}) h->addWidget(b);
 	new QShortcut(QKeySequence(Qt::Key_Escape), this, [this] { ed_.stop(); });
 	connect(&ed_.ctl, &PresetController::changed, this, [this] { refresh(); });
 	connect(&ed_.mgr, &WidgetManager::changed, this, [this] { refresh(); });
@@ -157,6 +162,7 @@ void LayoutToolbar::fill_menu()
 		const QString key = k.key;
 		add->addAction(k.title, this, [&mgr, key] { mgr.add(key); });
 	}
+	menu_->addAction(icon("globe"), "Add custom URL...", this, &LayoutToolbar::add_custom_url);
 	menu_->addSeparator();
 	if (mgr.docks.empty()) menu_->addAction("No widgets yet")->setEnabled(false);
 	for (auto *d : mgr.docks) {
@@ -164,6 +170,26 @@ void LayoutToolbar::fill_menu()
 		a->setCheckable(true);
 		a->setChecked(d->w.visible);
 		connect(a, &QAction::toggled, d, &DockWidget::set_visible_flag);
+	}
+}
+
+// Asks for an address (re-asking until it is a valid http/https URL or the user cancels) and adds it as a web widget.
+void LayoutToolbar::add_custom_url()
+{
+	QString text, error;
+	for (;;) {
+		QInputDialog dlg(nullptr);
+		dlg.setWindowTitle("Add Custom URL");
+		dlg.setLabelText(error.isEmpty() ? "Web address (https://...)" : error);
+		dlg.setTextValue(text);
+		prepare_dialog(&dlg);
+		if (dlg.exec() != QDialog::Accepted) return;
+		text = dlg.textValue();
+		if (auto url = web::normalize_url(text.toStdString())) {
+			ed_.mgr.add("web", qs(web::host_of(*url)), qs(*url));
+			return;
+		}
+		error = "Enter a valid http(s) address, for example https://example.com/page";
 	}
 }
 

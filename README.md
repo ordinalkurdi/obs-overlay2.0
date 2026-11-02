@@ -24,15 +24,14 @@ Requires OBS 31+ (frontend screenshot events, Qt 6). Unit tests of the pure logi
 | Python app | Plugin |
 |---|---|
 | OBS WebSocket (host, port, password, keyring) | direct libobs + obs-frontend-api calls on the UI thread |
-| pynput hotkeys + conflict detection | OBS hotkeys (`obs_hotkey_register_frontend`): rebind in *OBS Settings > Hotkeys*, entries start with "OBS Overlay:". Same defaults (Alt+Z, Alt+F9, ...) |
+| pynput hotkeys + conflict detection | OBS hotkeys (`obs_hotkey_register_frontend`): rebind in *OBS Settings > Hotkeys*, entries start with "OBS Overlay:". Only the four OBS has no equivalent for are registered (overlay, widgets, click-through, edit layout); record, replay, screenshot and mute use OBS's own hotkeys |
 | `core/service.py` worker thread + Qt signals | `Service` (synchronous, no locking: events arrive on the UI thread) |
 | `core/layouts.py`, `widget_rows.py`, `audio.py`, `webdocks.py` | `src/core/*.hpp`, pure C++, **unit-tested** |
 | qtawesome icons | Lucide-style inline SVG icons (hand-drawn, rendered with QtSvg) |
 | psutil CPU/RAM | Win32 / `/proc` / Mach calls, plus OBS process CPU (new "OBS CPU" metric) |
 | Screenshots via WebSocket | `obs_frontend_take_screenshot()`, then moved/converted to your folder, format, quality and name pattern |
-| Preview (WebSocket still) | the program texture read back from the GPU (still image on a timer, as before) |
+| Preview (still image on a timer) | real-time: an OBS render callback copies each frame (max ~30/s) of the program output; no refresh settings |
 | Audio meters | real `obs_volmeter` levels, same ballistics (attack/release/peak hold) |
-| Demo mode | kept (`DemoBackend`) |
 | Tray-only app | Tools menu entry + optional tray icon + OBS hotkeys |
 
 All other features are ported: docked/floating panel with slide animation, monitor edge reveal, pin, resize/move,
@@ -49,8 +48,9 @@ mode with snap guides and chips, layout presets (save/load/rename/overwrite/dele
   dialog with the URL copied). Presets for Twitch chat / Stream Manager are kept. Web zoom/transparency fields are
   stored in presets but have no effect.
 * **Video playback**: QtMultimedia is not available either, so videos open in your default player; images open in a viewer.
-  **Video thumbnails** use the Windows shell thumbnail provider (Windows only); on other systems videos show an icon.
   Video durations are not shown.
+* **Audio list** follows the scene (sources live in the current scene plus OBS's global devices); the eye button hides one by hand, "Show hidden..." restores; "Hide inactive" is a setting.
+* **Gallery video thumbnails** are decoded with the FFmpeg that ships in OBS's prebuilt deps (found by CMake); without it Windows falls back to Explorer thumbnails.
 * **Dropped %** now means OBS's network-dropped frames of the stream output (what OBS's status bar shows).
 * The first Windows build still needs your eyes (see below): UI paths such as flags and click-through are the same Qt
   calls as before, but OBS's own event loop is now the host.

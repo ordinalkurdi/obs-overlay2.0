@@ -1,4 +1,5 @@
 #include "gallery.hpp"
+#include "video_thumb.hpp"
 #include <QCryptographicHash>
 #include <algorithm>
 #include <QDesktopServices>
@@ -101,8 +102,9 @@ QImage make_thumbnail(const QString &path, int size)
 	if (IMAGE_EXT.contains(ext)) {
 		img = QImage(path);
 	} else if (VIDEO_EXT.contains(ext)) {
+		img = ffmpeg_thumbnail(path, size); // FFmpeg from OBS: handles mkv/mp4/mov/flv, whatever OBS records
 #ifdef _WIN32
-		img = shell_thumb(path, size);
+		if (img.isNull()) img = shell_thumb(path, size); // fallback: Explorer's own thumbnail
 #endif
 	}
 	if (img.isNull()) return {};

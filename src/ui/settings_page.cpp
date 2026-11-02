@@ -36,7 +36,6 @@ SettingsPage::SettingsPage(Service &svc, std::function<void(bool)> on_change, QW
 	outer->addWidget(sc);
 
 	QWidget *c = section("WINDOW");
-	choice(c, "mode", "Mode", "Live talks to the running OBS. Demo is a safe simulation to try every control.", {{"Live (OBS)", "obs"}, {"Demo", "demo"}}, true);
 	choice(c, "dock_mode", "Window style", "Docked slides out from a screen edge; floating is a normal movable window.", {{"Docked to screen edge", "docked"}, {"Floating", "floating"}});
 	choice(c, "dock_side", "Dock side", "Which edge the panel slides from.", {{"Right", "right"}, {"Left", "left"}});
 	QList<QPair<QString, QString>> mons;
@@ -70,7 +69,10 @@ SettingsPage::SettingsPage(Service &svc, std::function<void(bool)> on_change, QW
 	slider(c, "replay_seconds", 5, 600, "Instant Replay length", "Applied when the replay buffer starts", " s");
 	toggle(c, "confirm_stop_record", "Confirm before stopping a recording", "");
 	toggle(c, "confirm_stop_stream", "Confirm before stopping the stream", "");
-	toggle(c, "notifications", "Show notifications", "Short messages in the centre of the screen. They never take focus.");
+	toggle(c, "notifications", "Show notifications", "Short messages that never take focus or block clicks.");
+	choice(c, "notification_position", "Notification position", "Where on the screen notifications appear.",
+	       {{"Center", "center"}, {"Top left", "top-left"}, {"Top center", "top-center"}, {"Top right", "top-right"},
+		{"Bottom left", "bottom-left"}, {"Bottom center", "bottom-center"}, {"Bottom right", "bottom-right"}});
 	slider(c, "notification_seconds", 1, 10, "Notification time", "", " s");
 
 	c = section("GALLERY");
@@ -85,12 +87,11 @@ SettingsPage::SettingsPage(Service &svc, std::function<void(bool)> on_change, QW
 
 	c = section("AUDIO AND PREVIEW");
 	toggle(c, "audio_detect", "Live audio meters", "Real levels from OBS for every audio source.", true);
+	toggle(c, "audio_hide_inactive", "Hide inactive audio sources", "The mixer follows the scene: only sources live in the current scene are listed. Use the eye button on a row to hide one by hand.");
 	QList<QPair<QString, QString>> srcs = {{"Auto-detect", ""}};
 	for (auto &i : svc_.snap.inputs) srcs.push_back({QString::fromStdString(i.name), QString::fromStdString(i.name)});
 	choice(c, "mic_source", "Microphone source", "Used by the mic status widget and the mic mute hotkey.", srcs);
 	choice(c, "desktop_source", "Desktop audio source", "Used by the desktop status widget and mute hotkey.", srcs);
-	slider(c, "preview_delay_ms", 100, 5000, "Preview refresh", "A still image of the OBS output, not live video", " ms");
-	slider(c, "preview_width", 160, 640, "Preview size", "", " px");
 
 	c = section("WIDGETS");
 	slider(c, "stats_interval_ms", 500, 5000, "Widget refresh", "", " ms");
@@ -99,8 +100,8 @@ SettingsPage::SettingsPage(Service &svc, std::function<void(bool)> on_change, QW
 
 	c = section("HOTKEYS");
 	auto *hk = new QLabel("Hotkeys are part of OBS, so they work in games and are rebound in <b>OBS Settings &gt; Hotkeys</b>. "
-			      "Look for the entries starting with <b>OBS Overlay:</b>. Defaults: Alt+Z overlay, Alt+F9 record, Alt+F10 replay save, Alt+F1 screenshot, "
-			      "Ctrl+Alt+M / Ctrl+Alt+D mute mic / desktop, Alt+R widgets, Alt+Shift+W click-through, Alt+Shift+L edit layout.");
+			      "Look for the entries starting with <b>OBS Overlay:</b>. Defaults: Alt+Z overlay, Alt+R widgets, Alt+Shift+W click-through, Alt+Shift+L edit layout. "
+			      "Recording, replay buffer, screenshot and mute hotkeys are OBS's own (same settings page).");
 	hk->setWordWrap(true);
 	hk->setObjectName("dim");
 	c->layout()->addWidget(hk);
@@ -134,7 +135,7 @@ SettingsPage::SettingsPage(Service &svc, std::function<void(bool)> on_change, QW
 	auto *diag = new QPlainTextEdit;
 	diag->setReadOnly(true);
 	diag->setMaximumHeight(130);
-	QString d = QString("plugin %1\nmode: %2\n%3\n%4\nsettings: %5\nrecent messages:\n").arg(OVL_VERSION, cfg_.s("mode"), svc_.status_text(), svc_.diagnostics(), cfg_.path());
+	QString d = QString("plugin %1\n%2\n%3\nsettings: %4\nrecent messages:\n").arg(OVL_VERSION, svc_.status_text(), svc_.diagnostics(), cfg_.path());
 	for (auto &n : svc_.notifications) d += QString("  %1 [%2] %3\n").arg(n.time, n.level, n.text);
 	diag->setPlainText(d);
 	c->layout()->addWidget(diag);

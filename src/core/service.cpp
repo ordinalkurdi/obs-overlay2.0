@@ -25,7 +25,6 @@ QString Service::status_text() const
 {
 	switch (status_) {
 	case Status::Connected: return tr("Connected to OBS");
-	case Status::Demo: return tr("Demo mode");
 	default: return tr("Not running");
 	}
 }
@@ -46,12 +45,11 @@ void Service::say(const QString &level, const QString &text)
 void Service::start()
 {
 	shutdown();
-	const bool demo = cfg.s("mode") == "demo";
-	backend_ = demo ? make_demo_backend(cfg.s("gallery_root") + "/Demo") : make_live_backend();
+	backend_ = make_live_backend();
 	backend_->on_event = [this](const BackendEvent &e) { on_event(e); };
 	backend_->set_meters_enabled(cfg.b("audio_detect"));
-	status_ = demo ? Status::Demo : Status::Connected;
-	say("success", demo ? tr("Demo mode active") : tr("Overlay ready"));
+	status_ = Status::Connected;
+	say("success", tr("Overlay ready"));
 	refresh();
 	update_poll();
 }
@@ -87,7 +85,7 @@ void Service::update_poll()
 	const bool busy = ok() && (overlay_visible_ || widgets_visible_ || snap.recording || snap.streaming);
 	if (busy) poll_.start(overlay_visible_ ? 500 : qMax(500, cfg.i("stats_interval_ms")));
 	else poll_.stop();
-	const bool meters_on = ok() && overlay_visible_ && cfg.b("audio_detect") && !demo();
+	const bool meters_on = ok() && overlay_visible_ && cfg.b("audio_detect");
 	if (meters_on && !meter_poll_.isActive()) meter_poll_.start();
 	if (!meters_on) { meter_poll_.stop(); if (!meters.empty()) meters.clear(); }
 }
@@ -136,6 +134,9 @@ void Service::on_event(const BackendEvent &e)
 		if (!e.text.isEmpty()) say("info", tr("Scene: %1").arg(e.text));
 		break;
 	case BackendEvent::ScreenshotTaken: finish_screenshot(e.text); break;
+	case BackendEvent::PreviewFrame:
+		emit preview_ready(e.image); // frames arrive ~30/s: no state refresh, no notification
+		return;
 	case BackendEvent::Reload: break; // profile / scene collection changed: just re-read everything
 	default: break;
 	}
@@ -216,31 +217,6 @@ void Service::set_mute(const QString &name, bool muted)
 	refresh();
 }
 
-void Service::toggle_mute_role(const QString &role)
-{
-	const std::string &name = role == "mic" ? snap.mic : snap.desktop;
-	if (name.empty()) return say("warn", tr("No %1 audio source found in OBS").arg(role));
-	bool cur = false;
-	for (auto &i : snap.inputs) if (i.name == name) cur = i.muted; // always toggle from the REAL state
-	set_mute(QString::fromStdString(name), !cur);
-}
-
-void Service::set_role(const QString &role, const QString &name)
-{
-	if (role != "mic" && role != "desktop") return;
-	if (!name.isEmpty()) {
-		bool found = false;
-		for (auto &i : snap.inputs) if (i.name == name.toStdString()) found = true;
-		if (!found) return say("warn", tr("Audio source '%1' is not available in OBS").arg(name));
-	}
-	const QString other = role == "mic" ? "desktop_source" : "mic_source";
-	if (!name.isEmpty() && cfg.s(other.toUtf8().constData()) == name) cfg.set(other, QString()); // one source cannot be both
-	cfg.set(role + "_source", name);
-	cfg.save();
-	say("info", tr("%1: %2").arg(role == "mic" ? tr("Microphone") : tr("Desktop audio"), name.isEmpty() ? tr("auto-detect") : name));
-	refresh();
-}
-
 void Service::set_volume_db(const QString &name, double db)
 {
 	if (backend_ && ok()) backend_->set_volume_db(name.toStdString(), db);
@@ -301,16 +277,50 @@ void Service::finish_screenshot(const QString &obs_path)
 	}
 }
 
-// ---- preview ------------------------------------------------------------------------------------------------
-void Service::request_preview()
+// ---- preview -------------------------------------------------------------------------------------------------------
+void Service::set_preview(bool on, int width)
 {
-	if (!backend_ || !ok()) return;
-	QElapsedTimer t;
-	t.start();
-	QImage img = backend_->preview(cfg.i("preview_width"));
-	if (img.isNull()) return;
-	preview_ms = (double)t.nsecsElapsed() / 1e6;
-	emit preview_ready(img);
+	if (backend_ && ok()) backend_->set_preview(on, width);
+}
+
+// ---- audio list ----------------------------------------------------------------------------------------------------
+// The mixer follows the scene: a source is listed while it is live in the current scene (or is one of OBS's global
+// audio devices). "Hide inactive" can be turned off in Settings; sources hidden by hand stay hidden until restored.
+std::vector<InputInfo> Service::mixer_inputs() const
+{
+	const QStringList hidden = cfg.list("audio_hidden");
+	const bool hide_inactive = cfg.b("audio_hide_inactive");
+	std::vector<InputInfo> out;
+	for (auto &i : snap.inputs) {
+		if (hidden.contains(QString::fromStdString(i.name))) continue;
+		if (hide_inactive && !i.active) continue;
+		out.push_back(i);
+	}
+	return out;
+}
+
+int Service::hidden_audio_count() const
+{
+	int n = 0;
+	const QStringList hidden = cfg.list("audio_hidden");
+	for (auto &i : snap.inputs) if (hidden.contains(QString::fromStdString(i.name))) ++n;
+	return n;
+}
+
+void Service::set_audio_hidden(const QString &name, bool hide)
+{
+	QStringList l = cfg.list("audio_hidden");
+	l.removeAll(name);
+	if (hide) l << name;
+	cfg.set_list("audio_hidden", l);
+	cfg.save();
+	emit state_changed();
+}
+
+void Service::apply_settings()
+{
+	if (backend_) backend_->set_meters_enabled(cfg.b("audio_detect"));
+	update_poll();
 }
 
 } // namespace ovl

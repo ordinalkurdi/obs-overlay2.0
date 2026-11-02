@@ -214,14 +214,27 @@ NotificationWindow::NotificationWindow()
 	connect(&anim_, &QPropertyAnimation::finished, this, [this] { if (windowOpacity() < 0.05) hide(); });
 }
 
-void NotificationWindow::show_msg(const QString &level, const QString &text, double seconds)
+void NotificationWindow::place(const QString &pos)
+{
+	const QRect g = target_screen()->availableGeometry();
+	const int m = 24, w = width(), h = height();
+	int x = g.center().x() - w / 2, y = g.center().y() - h / 2;
+	if (pos.endsWith("left")) x = g.left() + m;
+	else if (pos.endsWith("right")) x = g.right() - w - m + 1;
+	if (pos.startsWith("top")) y = g.top() + m;
+	else if (pos.startsWith("bottom")) y = g.bottom() - h - m + 1;
+	move(x, y);
+}
+
+void NotificationWindow::show_msg(const QString &level, const QString &text, double seconds, const QString &position)
 {
 	static const QHash<QString, QString> colors = {{"info", "#3a3a3a"}, {"success", "#1f5a3d"}, {"warn", "#6b5410"}, {"error", "#7a2323"}};
 	lab_->setStyleSheet(QString("background:%1; color:#f2f2f2; border-radius:8px; padding:10px 16px; font-size:14px;").arg(colors.value(level, "#3a3a3a")));
 	lab_->setText(text);
 	anim_.stop();
 	setWindowOpacity(1.0);
-	center_widget(this);
+	adjustSize();
+	place(position);
 	show();
 	raise();
 	timer_.start((int)(seconds * 1000));

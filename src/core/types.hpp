@@ -12,8 +12,7 @@ struct InputInfo {
 	std::string name, kind;
 	bool muted = false;
 	double db = 0.0;
-	bool active = true;      // live in the program scene
-	bool audio_flag = true;  // a "real" audio source (capture device), not a source that merely may carry audio
+	bool active = true; // live in the program scene (or a global OBS audio device, which is always live)
 };
 
 struct ItemInfo {

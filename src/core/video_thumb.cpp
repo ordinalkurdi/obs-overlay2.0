@@ -71,13 +71,14 @@ bool load_set(Api &a, int util, int codec, int format, int scale)
 
 Api &api()
 {
-	static Api a = [] {
-		Api x;
+	// heap-allocated and never freed: QLibrary cannot be copied, and the DLLs stay loaded for the life of OBS anyway
+	static Api *a = [] {
+		auto *x = new Api;
 		// OBS 31/32 ship FFmpeg 7.x (avformat-61), newer builds FFmpeg 8 (avformat-62). Anything else: no thumbnails.
-		x.ok = load_set(x, 60, 62, 62, 9) || load_set(x, 59, 61, 61, 8);
+		x->ok = load_set(*x, 60, 62, 62, 9) || load_set(*x, 59, 61, 61, 8);
 		return x;
 	}();
-	return a;
+	return *a;
 }
 
 } // namespace

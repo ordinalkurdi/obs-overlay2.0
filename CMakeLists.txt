@@ -35,31 +35,10 @@ set_target_properties(
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE OVL_VERSION="${_version}")
 
-# Video thumbnails in the gallery use the FFmpeg that ships with OBS's prebuilt dependencies (found through the
-# template's CMAKE_PREFIX_PATH). If it is not found the gallery falls back to the Windows shell thumbnails.
-option(OVL_USE_FFMPEG "Decode gallery video thumbnails with FFmpeg (turn OFF if OBS cannot load the plugin)" ON)
-if(OVL_USE_FFMPEG)
-  find_path(OVL_FFMPEG_INCLUDE libavformat/avformat.h)
-  find_library(OVL_AVFORMAT avformat)
-  find_library(OVL_AVCODEC avcodec)
-  find_library(OVL_AVUTIL avutil)
-  find_library(OVL_SWSCALE swscale)
-endif()
-if(OVL_USE_FFMPEG AND OVL_FFMPEG_INCLUDE AND OVL_AVFORMAT AND OVL_AVCODEC AND OVL_AVUTIL AND OVL_SWSCALE)
-  message(STATUS "obs-overlay: FFmpeg found, video thumbnails enabled")
-  target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${OVL_FFMPEG_INCLUDE})
-  target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${OVL_AVFORMAT} ${OVL_AVCODEC} ${OVL_AVUTIL} ${OVL_SWSCALE})
-  target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE OVL_HAVE_FFMPEG)
-elseif(OVL_USE_FFMPEG)
-  message(WARNING "obs-overlay: FFmpeg not found, video thumbnails fall back to the OS (Windows only)")
-endif()
-
 target_sources(
   ${CMAKE_PROJECT_NAME}
   PRIVATE
     src/plugin-main.cpp
-    src/core/video_thumb.cpp
-    src/core/video_thumb.hpp
     src/app.cpp
     src/app.hpp
     src/core/settings.cpp

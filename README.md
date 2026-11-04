@@ -50,7 +50,7 @@ mode with snap guides and chips, layout presets (save/load/rename/overwrite/dele
 * **Video playback**: QtMultimedia is not available either, so videos open in your default player; images open in a viewer.
   Video durations are not shown.
 * **Audio list** follows the scene (sources live in the current scene plus OBS's global devices); the eye button hides one by hand, "Show hidden..." restores; "Hide inactive" is a setting.
-* **Gallery video thumbnails** are decoded with the FFmpeg that ships in OBS's prebuilt deps (found by CMake); without it Windows falls back to Explorer thumbnails.
+* **Gallery video thumbnails** use Windows' own thumbnail provider (what Explorer shows). The plugin links no FFmpeg, so it has no dependency on OBS's FFmpeg DLL version. mkv files only get a thumbnail if Windows can show one (codec pack installed); mp4 works by default.
 * **Dropped %** now means OBS's network-dropped frames of the stream output (what OBS's status bar shows).
 * The first Windows build still needs your eyes (see below): UI paths such as flags and click-through are the same Qt
   calls as before, but OBS's own event loop is now the host.

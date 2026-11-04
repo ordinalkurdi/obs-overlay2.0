@@ -3,7 +3,8 @@
 #include <QString>
 
 namespace ovl {
-// Decodes one frame from a video with the FFmpeg libraries that ship with OBS (mp4, mkv, mov, flv, ...: whatever OBS can
-// record). Returns a null image if FFmpeg is not available in this build or the file cannot be decoded.
+// Decodes one frame from a video using the FFmpeg DLLs that ship with OBS, loaded at RUNTIME (never linked): if they
+// are missing or are a version this code does not know, the function simply returns a null image and the plugin keeps
+// working. Handles whatever OBS can record (mkv, mp4, mov, flv ...).
 QImage ffmpeg_thumbnail(const QString &path, int size);
 }

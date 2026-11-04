@@ -35,10 +35,24 @@ set_target_properties(
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE OVL_VERSION="${_version}")
 
+# Gallery video thumbnails: FFmpeg HEADERS from OBS's prebuilt dependencies are used at compile time only. The FFmpeg
+# DLLs are loaded at runtime from OBS's own folder (nothing is linked), so a missing or different FFmpeg can never stop
+# the plugin from loading: thumbnails just fall back to the Windows ones.
+find_path(OVL_FFMPEG_INCLUDE libavformat/avformat.h)
+if(OVL_FFMPEG_INCLUDE)
+  message(STATUS "obs-overlay: FFmpeg headers found (runtime-loaded video thumbnails)")
+  target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${OVL_FFMPEG_INCLUDE})
+  target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE OVL_HAVE_FFMPEG_HEADERS)
+else()
+  message(WARNING "obs-overlay: FFmpeg headers not found, gallery video thumbnails use the Windows ones only")
+endif()
+
 target_sources(
   ${CMAKE_PROJECT_NAME}
   PRIVATE
     src/plugin-main.cpp
+    src/core/video_thumb.cpp
+    src/core/video_thumb.hpp
     src/app.cpp
     src/app.hpp
     src/core/settings.cpp

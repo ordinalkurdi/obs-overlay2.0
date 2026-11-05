@@ -188,7 +188,6 @@ void GalleryWindow::rebuild()
 // ---- recent strip ---------------------------------------------------------------------------------------------------------------
 GalleryStrip::GalleryStrip(MediaStore &store) : store_(store)
 {
-	setFixedHeight(86);
 	setWidgetResizable(true);
 	setFrameShape(QFrame::NoFrame);
 	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -202,6 +201,8 @@ GalleryStrip::GalleryStrip(MediaStore &store) : store_(store)
 
 void GalleryStrip::build()
 {
+	const int w = qBound(80, store_.settings().i("strip_size"), 240), h = w * 5 / 8; // 8:5 keeps the old look at 112 px
+	setFixedHeight(h + 16);
 	auto *host = new QWidget;
 	host->setObjectName("plain");
 	auto *h = new QHBoxLayout(host);
@@ -211,8 +212,8 @@ void GalleryStrip::build()
 	for (auto &m : store_.items()) {
 		if (n++ >= 12) break;
 		auto *b = new QToolButton;
-		b->setFixedSize(112, 70);
-		b->setIconSize(QSize(108, 66));
+		b->setFixedSize(w, h);
+		b->setIconSize(QSize(w - 4, h - 4));
 		b->setIcon(thumb_icon(store_, m));
 		b->setToolTip(store_.display_name(m, n - 1));
 		b->setContextMenuPolicy(Qt::CustomContextMenu);

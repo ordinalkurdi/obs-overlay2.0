@@ -69,7 +69,8 @@ QJsonObject Settings::defaults()
 	o["stats_interval_ms"] = 1000;
 	o["stats_warn_dropped_pct"] = 2.0;
 	o["stats_warn_cpu_pct"] = 85.0;
-	o["thumb_size"] = 150;
+	o["thumb_size"] = 150; // full gallery page picture width
+	o["strip_size"] = 112; // picture width in the "recent captures" strip on the home panel
 	return o;
 }
 

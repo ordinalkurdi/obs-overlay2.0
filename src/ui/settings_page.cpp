@@ -77,6 +77,7 @@ SettingsPage::SettingsPage(Service &svc, std::function<void(bool)> on_change, QW
 
 	c = section("GALLERY");
 	text(c, "gallery_root", "Gallery folder", "Sub-folders (per game, replays) are scanned too.", true);
+	slider(c, "strip_size", 80, 240, "Recent captures picture size", "Pictures in the strip at the top of the panel (the full gallery has its own slider)", " px");
 	toggle(c, "hide_filenames", "Hide file names", "Show Video 1 / Image 2 instead (for streaming).");
 	auto *clear = new QPushButton("Clear favorites");
 	connect(clear, &QPushButton::clicked, this, [this] {

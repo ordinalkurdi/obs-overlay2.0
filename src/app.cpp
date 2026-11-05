@@ -98,6 +98,7 @@ void App::apply_changes(bool restart)
 {
 	ui::restyle_all();
 	overlay_->apply_settings();
+	overlay_->strip->rebuild(); // picture size of the recent-captures strip
 	if (restart) svc_->apply_settings();
 	widgets_->apply(false);
 	store_->rescan();

@@ -54,6 +54,7 @@ Overlay::Overlay(Service &svc, MediaStore &store) : QWidget(nullptr), svc_(svc),
 		if (cfg_.b("notifications")) toast_->show_msg(lv, t, cfg_.d("notification_seconds"), cfg_.s("notification_position"));
 	});
 	connect(&svc_, &Service::meters_changed, this, &Overlay::update_meters);
+	connect(&svc_, &Service::preview_ready, this, &Overlay::set_preview);
 
 	idle_.setSingleShot(true);
 	connect(&idle_, &QTimer::timeout, this, &Overlay::auto_hide);
@@ -166,6 +167,12 @@ void Overlay::build()
 	scene_box_->setToolTip("Switch OBS scene");
 	scene_row_->add_tail(scene_box_);
 	hv->addWidget(scene_row_);
+	prev_row_ = new Row("monitor", "Preview", "Real-time view of the OBS output");
+	hv->addWidget(prev_row_);
+	prev_lab_ = new QLabel;
+	prev_lab_->setAlignment(Qt::AlignCenter);
+	prev_lab_->setVisible(false);
+	hv->addWidget(prev_lab_);
 	src_row_ = new Row("layers", "Sources", "Show / hide / lock sources of the current scene");
 	hv->addWidget(src_row_);
 	srcbox_ = new QWidget;
@@ -202,6 +209,7 @@ void Overlay::build()
 	connect(mix_row_, &Row::clicked, this, &Overlay::toggle_mixer);
 	connect(pause_, &Row::clicked, &svc_, &Service::toggle_pause);
 	connect(vcam_, &Row::clicked, &svc_, &Service::toggle_vcam);
+	connect(prev_row_, &Row::clicked, this, &Overlay::toggle_preview);
 	connect(src_row_, &Row::clicked, this, &Overlay::toggle_sources);
 	connect(scene_box_, &QComboBox::activated, this, [this] { svc_.set_scene(scene_box_->currentText()); });
 }
@@ -350,6 +358,7 @@ void Overlay::resizeEvent(QResizeEvent *e)
 {
 	QWidget::resizeEvent(e);
 	place_grips();
+	if (preview_on_ && isVisible()) svc_.set_preview(true, preview_width()); // keep the preview sharp after a resize
 	if (user_resize) persist_.start(); // only user drags are saved, not programmatic resizes
 }
 
@@ -395,6 +404,7 @@ void Overlay::show_page(const QString &name)
 void Overlay::hideEvent(QHideEvent *e)
 {
 	meter_timer_.stop();
+	svc_.set_preview(false, 0); // no rendering while the panel is hidden
 	open_ = false;
 	edge_->refresh(false);
 	if (!docked()) { cfg_.set("pos", QJsonArray{x(), y()}); cfg_.save(); }
@@ -409,6 +419,7 @@ void Overlay::showEvent(QShowEvent *e)
 	store_.rescan();
 	svc_.set_overlay_visible(true);
 	update_meters();
+	if (preview_on_) svc_.set_preview(true, preview_width());
 	emit visibility_changed(true);
 }
 
@@ -497,6 +508,9 @@ void Overlay::live_clicked()
 
 void Overlay::restore_sections()
 {
+	preview_on_ = cfg_.b("ui_preview_open");
+	prev_lab_->setVisible(preview_on_);
+	prev_row_->set_right_icon(preview_on_ ? "chevron-down" : "chevron-right", FG_DIM);
 	srcbox_->setVisible(cfg_.b("ui_sources_open"));
 	src_row_->set_right_icon(cfg_.b("ui_sources_open") ? "chevron-down" : "chevron-right", FG_DIM);
 	mixer_box_->setVisible(cfg_.b("ui_audio_open"));
@@ -506,6 +520,25 @@ void Overlay::restore_sections()
 void Overlay::remember(const char *key, bool v)
 {
 	if (cfg_.b(key) != v) { cfg_.set(key, v); cfg_.save(); }
+}
+
+void Overlay::toggle_preview()
+{
+	preview_on_ = !preview_on_;
+	prev_lab_->setVisible(preview_on_);
+	remember("ui_preview_open", preview_on_);
+	prev_row_->set_right_icon(preview_on_ ? "chevron-down" : "chevron-right", FG_DIM);
+	svc_.set_preview(preview_on_ && isVisible(), preview_width());
+}
+
+int Overlay::preview_width() const { return qMax(160, qMin(int((width() - 32) * devicePixelRatioF()), 960)); }
+
+void Overlay::set_preview(const QImage &img)
+{
+	if (img.isNull() || !preview_on_) return;
+	QPixmap pm = QPixmap::fromImage(img);
+	pm.setDevicePixelRatio(devicePixelRatioF());
+	prev_lab_->setPixmap(pm);
 }
 
 void Overlay::toggle_sources()
@@ -580,7 +613,7 @@ void Overlay::sync()
 	const bool ok = svc_.ok();
 	dot_->setStyleSheet(QString("background:%1; border-radius:5px;").arg(ok ? "#3ecf8e" : "#e5534b"));
 	dot_->setToolTip(svc_.status_text());
-	for (Row *r : {rec_, rep_, save_, shot_, live_, scene_row_, mix_row_, src_row_}) r->setEnabled(ok);
+	for (Row *r : {rec_, rep_, save_, shot_, live_, scene_row_, mix_row_, prev_row_, src_row_}) r->setEnabled(ok);
 	const bool rec = s.recording;
 	rec_->set_icon(rec ? "stop-circle" : "record", rec ? "#ff5c5c" : FG);
 	rec_->set_right_icon(rec ? "stop" : "play");

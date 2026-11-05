@@ -30,7 +30,7 @@ Requires OBS 31+ (frontend screenshot events, Qt 6). Unit tests of the pure logi
 | qtawesome icons | Lucide-style inline SVG icons (hand-drawn, rendered with QtSvg) |
 | psutil CPU/RAM | Win32 / `/proc` / Mach calls, plus OBS process CPU (new "OBS CPU" metric) |
 | Screenshots via WebSocket | `obs_frontend_take_screenshot()`, then moved/converted to your folder, format, quality and name pattern |
-| Preview (still image on a timer) | removed from the plugin (OBS already has its own preview) |
+| Preview (still image on a timer) | real-time: an OBS render callback copies each frame (max ~30/s) of the program output; only renders while the panel is open and the Preview section is expanded |
 | Audio meters | real `obs_volmeter` levels, same ballistics (attack/release/peak hold) |
 | Tray-only app | Tools menu entry + optional tray icon + OBS hotkeys |
 

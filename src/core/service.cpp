@@ -102,7 +102,6 @@ void Service::refresh()
 {
 	if (!backend_) return;
 	snap = backend_->snapshot();
-	audio::apply_roles(snap, cfg.s("mic_source").toStdString(), cfg.s("desktop_source").toStdString());
 	if (widgets_visible_) sys = sample_system_metrics();
 	update_poll();
 	emit state_changed();

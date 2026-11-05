@@ -35,6 +35,7 @@ class MediaStore : public QObject {
 	Q_OBJECT
 public:
 	MediaStore(Settings &cfg, const QString &cache_dir, QObject *parent = nullptr);
+	Settings &settings() { return cfg_; }
 	const std::vector<Media> &items() const { return items_; }
 	void rescan();
 	QImage thumb(const Media &m); // returns a cached thumbnail or a null image and requests one

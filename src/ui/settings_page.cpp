@@ -78,20 +78,15 @@ SettingsPage::SettingsPage(Service &svc, std::function<void(bool)> on_change, QW
 	c = section("GALLERY");
 	text(c, "gallery_root", "Gallery folder", "Sub-folders (per game, replays) are scanned too.", true);
 	toggle(c, "hide_filenames", "Hide file names", "Show Video 1 / Image 2 instead (for streaming).");
-	slider(c, "thumb_size", 100, 260, "Thumbnail size", "", " px");
 	auto *clear = new QPushButton("Clear favorites");
 	connect(clear, &QPushButton::clicked, this, [this] {
 		if (confirm("Clear history", "Remove all favorites? Your files are not touched.", true)) { cfg_.set_list("favorites", {}); cfg_.save(); changed(); }
 	});
 	c->layout()->addWidget(clear);
 
-	c = section("AUDIO AND PREVIEW");
+	c = section("AUDIO");
 	toggle(c, "audio_detect", "Live audio meters", "Real levels from OBS for every audio source.", true);
 	toggle(c, "audio_hide_inactive", "Hide inactive audio sources", "The mixer follows the scene: only sources live in the current scene are listed. Use the eye button on a row to hide one by hand.");
-	QList<QPair<QString, QString>> srcs = {{"Auto-detect", ""}};
-	for (auto &i : svc_.snap.inputs) srcs.push_back({QString::fromStdString(i.name), QString::fromStdString(i.name)});
-	choice(c, "mic_source", "Microphone source", "Used by the mic status widget and the mic mute hotkey.", srcs);
-	choice(c, "desktop_source", "Desktop audio source", "Used by the desktop status widget and mute hotkey.", srcs);
 
 	c = section("WIDGETS");
 	slider(c, "stats_interval_ms", 500, 5000, "Widget refresh", "", " ms");

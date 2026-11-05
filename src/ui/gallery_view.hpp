@@ -29,10 +29,12 @@ protected:
 	void showEvent(QShowEvent *) override;
 private:
 	void rebuild();
+	void apply_size();
 	std::vector<const Media *> filtered() const;
 	MediaStore &store_;
 	QLineEdit *search_;
 	QComboBox *filter_, *sort_;
+	QSlider *size_;
 	QListWidget *list_;
 	QTimer rebuild_timer_;
 };

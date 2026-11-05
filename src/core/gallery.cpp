@@ -198,7 +198,7 @@ QImage MediaStore::thumb(const Media &m)
 	if (failed_.contains(m.path) || pending_.contains(m.path)) return {};
 	pending_.insert(m.path);
 	QPointer<MediaStore> self(this);
-	const int size = qMax(160, cfg_.i("thumb_size") * 2);
+	const int size = 480; // one generous size: the gallery scales it to the size chosen with the slider, no regeneration
 	const QString path = m.path, cache = cache_;
 	const qint64 mt = m.mtime, sz = m.size;
 	run_async([self, path, cache, size, mt, sz] {

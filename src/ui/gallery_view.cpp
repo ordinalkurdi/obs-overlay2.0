@@ -11,6 +11,7 @@
 #include <QMenu>
 #include <QPixmap>
 #include <QScreen>
+#include <QSlider>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -84,9 +85,17 @@ GalleryWindow::GalleryWindow(MediaStore &store, QWidget *parent) : QWidget(paren
 	filter_->addItems({"All", "Recordings", "Clips", "Screenshots", "Favorites"});
 	sort_ = new QComboBox;
 	sort_->addItems({"Newest", "Oldest", "Name", "Largest"});
+	size_ = new QSlider(Qt::Horizontal);
+	size_->setRange(100, 320);
+	size_->setValue(qBound(100, store_.settings().i("thumb_size"), 320));
+	size_->setFixedWidth(90);
+	size_->setToolTip("Picture size");
+	size_->setAccessibleName("Picture size");
 	top->addWidget(search_, 1);
 	top->addWidget(filter_);
 	top->addWidget(sort_);
+	top->addWidget(new QLabel("Size"));
+	top->addWidget(size_);
 	list_ = new QListWidget;
 	list_->setViewMode(QListView::IconMode);
 	list_->setResizeMode(QListView::Adjust);
@@ -101,6 +110,11 @@ GalleryWindow::GalleryWindow(MediaStore &store, QWidget *parent) : QWidget(paren
 	rebuild_timer_.setSingleShot(true);
 	rebuild_timer_.setInterval(120);
 	connect(&rebuild_timer_, &QTimer::timeout, this, &GalleryWindow::rebuild);
+	auto *size_save = new QTimer(this); // save once the slider settles, not on every pixel
+	size_save->setSingleShot(true);
+	size_save->setInterval(300);
+	connect(size_save, &QTimer::timeout, this, [this] { store_.settings().set("thumb_size", size_->value()); store_.settings().save(); });
+	connect(size_, &QSlider::valueChanged, this, [this, size_save] { apply_size(); size_save->start(); });
 	connect(search_, &QLineEdit::textChanged, &rebuild_timer_, qOverload<>(&QTimer::start));
 	connect(filter_, &QComboBox::currentIndexChanged, &rebuild_timer_, qOverload<>(&QTimer::start));
 	connect(sort_, &QComboBox::currentIndexChanged, &rebuild_timer_, qOverload<>(&QTimer::start));
@@ -149,11 +163,18 @@ std::vector<const Media *> GalleryWindow::filtered() const
 	return out;
 }
 
+// Applies the picture size from the slider to the grid right away (thumbnails are scaled, never regenerated).
+void GalleryWindow::apply_size()
+{
+	const int s = size_->value(), h = s * 9 / 16;
+	list_->setIconSize(QSize(s, h));
+	list_->setGridSize(QSize(s + 18, h + 44));
+}
+
 void GalleryWindow::rebuild()
 {
-	const int size = 150;
 	list_->clear();
-	list_->setIconSize(QSize(size, size * 9 / 16 + 20));
+	apply_size();
 	int idx = 0;
 	for (const Media *m : filtered()) {
 		auto *it = new QListWidgetItem(thumb_icon(store_, *m), store_.display_name(*m, idx++));

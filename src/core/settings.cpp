@@ -60,8 +60,6 @@ QJsonObject Settings::defaults()
 	o["audio_detect"] = true;
 	o["audio_hide_inactive"] = true; // mixer lists only sources live in the current scene
 	o["audio_hidden"] = QJsonArray(); // sources the user hid by hand
-	o["mic_source"] = "";
-	o["desktop_source"] = "";
 	o["stats_visible"] = false; // master switch for all floating widgets
 	o["ui_preview_open"] = false;
 	o["ui_sources_open"] = false;

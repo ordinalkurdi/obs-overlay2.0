@@ -178,13 +178,6 @@ static void test_rows_audio()
 	CHECK(audio::is_active(-40) && !audio::is_active(-55));
 	CHECK(std::fabs(audio::mul_to_db(0.5) + 6.0206) < 1e-3);
 
-	Snapshot a; a.inputs = {{"Mic", "k", false, 0, true}, {"Desk", "k", false, 0, true}}; a.mic = "Mic"; a.desktop = "Desk";
-	audio::apply_roles(a, "Desk", ""); // mic override equal to desktop -> desktop (no override) loses nothing; mic wins
-	CHECK(a.mic == "Desk" && a.desktop.empty());
-	a.mic = "Mic"; a.desktop = "Desk";
-	audio::apply_roles(a, "nope", "also nope");
-	CHECK(a.mic == "Mic" && a.desktop == "Desk");
-
 	audio::Ballistics b; b.target = 80;
 	for (int i = 0; i < 10; ++i) b.step(0.02);
 	CHECK(b.value > 60 && b.peak >= b.value - 1e-9);

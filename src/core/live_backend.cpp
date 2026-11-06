@@ -337,8 +337,15 @@ private:
 			uint8_t *data = nullptr;
 			uint32_t linesize = 0;
 			if (gs_stagesurface_map(ss_[1 - cur_], &data, &linesize)) {
-				post_frame(QImage(data, (int)w, (int)h, (qsizetype)linesize, QImage::Format_RGB32).copy());
+				QImage img = QImage(data, (int)w, (int)h, (qsizetype)linesize, QImage::Format_RGB32).copy();
 				gs_stagesurface_unmap(ss_[1 - cur_]);
+				// OBS leaves alpha = 0 wherever no source covers the canvas. Force every pixel opaque so those areas
+				// show as black, never as see-through.
+				for (int y = 0; y < img.height(); ++y) {
+					auto *line = reinterpret_cast<uint32_t *>(img.scanLine(y));
+					for (int x = 0; x < img.width(); ++x) line[x] |= 0xFF000000u;
+				}
+				post_frame(std::move(img));
 			}
 		}
 		have_prev_ = true;

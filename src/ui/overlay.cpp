@@ -171,6 +171,7 @@ void Overlay::build()
 	hv->addWidget(prev_row_);
 	prev_lab_ = new QLabel;
 	prev_lab_->setAlignment(Qt::AlignCenter);
+	prev_lab_->setStyleSheet("background:#000;"); // black behind the image, never see-through
 	prev_lab_->setVisible(false);
 	hv->addWidget(prev_lab_);
 	src_row_ = new Row("layers", "Sources", "Show / hide / lock sources of the current scene");
